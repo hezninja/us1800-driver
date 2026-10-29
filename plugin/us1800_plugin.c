@@ -323,7 +323,8 @@ static OSStatus DoIOOperation(AudioServerPlugInDriverRef d, AudioObjectID dev, A
     float *buf = main;
 
     if (op == kAudioServerPlugInIOOperationReadInput && stream == STREAM_IN_ID) {
-        if (!gShm) { memset(buf, 0, n * IN_CHANNELS * sizeof(float)); return 0; }
+        if (!gShm || !atomic_load_explicit(&gShm->running, memory_order_relaxed)) {      /* no daemon, or unit unplugged */
+            memset(buf, 0, n * IN_CHANNELS * sizeof(float)); gCapInit = 0; return 0; }
         const uint32_t cushion = gShm->cap_cushion;
         uint64_t w = atomic_load_explicit(&gShm->cap_w, memory_order_acquire);
         double avail = (double)w - gCapPos;

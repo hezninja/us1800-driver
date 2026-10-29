@@ -51,7 +51,7 @@ static void on_signal(int s) { (void)s; g_run = 0; }
 
 /* ---- USB open helpers -------------------------------------------------------------------------------------- */
 
-static IOUSBDeviceInterface300 **open_device(void)
+static CFMutableDictionaryRef us1800_match(void)
 {
     CFMutableDictionaryRef m = IOServiceMatching(kIOUSBDeviceClassName);
     SInt32 v = VID, p = PID;
@@ -59,7 +59,12 @@ static IOUSBDeviceInterface300 **open_device(void)
     CFDictionarySetValue(m, CFSTR(kUSBVendorID), nv);
     CFDictionarySetValue(m, CFSTR(kUSBProductID), np);
     CFRelease(nv); CFRelease(np);
-    io_service_t svc = IOServiceGetMatchingService(kIOMainPortDefault, m);
+    return m;
+}
+
+static IOUSBDeviceInterface300 **open_device(void)
+{
+    io_service_t svc = IOServiceGetMatchingService(kIOMainPortDefault, us1800_match());
     if (!svc) return NULL;
     IOCFPlugInInterface **plug = NULL; SInt32 score;
     IOCreatePlugInInterfaceForService(svc, kIOUSBDeviceUserClientTypeID, kIOCFPlugInInterfaceID, &plug, &score);
@@ -282,6 +287,30 @@ static int init_device(void)
     return 0;
 }
 
+/* ---- unplug handling ---------------------------------------------------------------------------------------- *
+ * On unplug the daemon exits and launchd restarts it; the new instance waits for the unit to come back and starts clean.
+ * The shm object is never unlinked, so the plug-in in coreaudiod stays attached across restarts (see shm_create). */
+
+static void on_terminated(void *ref, io_iterator_t it)
+{
+    (void)ref;
+    io_service_t s; int gone = 0;
+    while ((s = IOIteratorNext(it))) { IOObjectRelease(s); gone = 1; }
+    if (!gone) return;
+    atomic_store(&g_shm->running, 0);
+    fprintf(stderr, "[us1800d] US-1800 unplugged, exiting\n");
+    _exit(0);
+}
+
+static void watch_unplug(void)
+{
+    IONotificationPortRef np = IONotificationPortCreate(kIOMainPortDefault);
+    CFRunLoopAddSource(CFRunLoopGetCurrent(), IONotificationPortGetRunLoopSource(np), kCFRunLoopDefaultMode);
+    io_iterator_t it;
+    IOServiceAddMatchingNotification(np, kIOTerminatedNotification, us1800_match(), on_terminated, NULL, &it);
+    io_service_t d; while ((d = IOIteratorNext(it))) IOObjectRelease(d);   /* arm the notification */
+}
+
 /* ---- shared memory ------------------------------------------------------------------------------------------ */
 
 static us1800_shm *shm_create(void)
@@ -289,11 +318,12 @@ static us1800_shm *shm_create(void)
     int fd = shm_open(US1800_SHM_NAME, O_CREAT | O_RDWR, 0666);
     if (fd < 0) { perror("shm_open"); return NULL; }
     fchmod(fd, 0666);
-    if (ftruncate(fd, sizeof(us1800_shm)) != 0) { perror("ftruncate"); close(fd); return NULL; }
+    struct stat st;     /* macOS rejects ftruncate on a shm object that is already sized, so only size a fresh one */
+    if (fstat(fd, &st) != 0 || (st.st_size < (off_t)sizeof(us1800_shm) && ftruncate(fd, sizeof(us1800_shm)) != 0)) { perror("ftruncate"); close(fd); return NULL; }
     us1800_shm *s = mmap(NULL, sizeof *s, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     close(fd);
     if (s == MAP_FAILED) { perror("mmap"); return NULL; }
-    memset(s, 0, sizeof *s);
+    memset(s, 0, sizeof *s);        /* an existing object is reused: the plug-in's mapping stays valid and resyncs to the reset counters */
     s->magic = US1800_SHM_MAGIC; s->version = US1800_SHM_VERSION; s->rate = g_rate; s->out_ch = g_out_ch;
     return s;
 }
@@ -472,7 +502,15 @@ int main(int argc, char **argv)
     signal(SIGINT, on_signal); signal(SIGTERM, on_signal);
 
     g_shm = shm_create();
-    if (!g_shm || init_device() != 0) return 1;
+    if (!g_shm) return 1;
+    {   io_service_t d; int waited = 0;     /* idle until the unit is plugged in; no log spam, launchd keeps us alive */
+        while (g_run && !(d = IOServiceGetMatchingService(kIOMainPortDefault, us1800_match()))) { if (!waited++) fprintf(stderr, "waiting for US-1800\n"); sleep(1); }
+        if (!g_run) return 0;
+        IOObjectRelease(d);
+        if (waited) sleep(2);               /* let a freshly enumerated unit settle */
+    }
+    if (init_device() != 0) return 1;
+    watch_unplug();
     g_shm->play_prefill = g_prefill; g_shm->cap_cushion = g_cushion;
 
     for (int i = 0; i < OUT_SLOTS; i++) {
@@ -505,7 +543,6 @@ int main(int argc, char **argv)
     pthread_join(cap, NULL); pthread_join(outt, NULL);
     for (int i = 0; i < 5; i++) CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, false);
     (*g_if0)->USBInterfaceClose(g_if0); (*g_if1)->USBInterfaceClose(g_if1); (*g_dev)->USBDeviceClose(g_dev);
-    shm_unlink(US1800_SHM_NAME);
     fprintf(stderr, "us1800d stopped\n");
     return 0;
 }
