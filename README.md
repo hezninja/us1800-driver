@@ -111,7 +111,7 @@ for debugging: `US1800_DUMP` (write the playback wire data to a file), `US1800_N
 4. `build/us1800_client stat` prints `running=1 ... usb_errors=0`.
 5. System Settings > Sound lists **US1800**. Select it for input and output and play something. Both monitor channels
    should work; outputs 1 and 2 are the left and right monitors.
-6. Power-cycle the unit while logged in: the daemon should recover (it restarts itself within a few seconds).
+6. Optional and untested: power-cycle the unit while logged in. The daemon is set to restart if it exits, but unplug/replug recovery has not been verified.
 7. Check the log: `tail ~/Library/Logs/us1800d.log` should show a status line every 10 s with `usb_errors=0`.
 
 ## Testing
