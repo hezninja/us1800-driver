@@ -3,7 +3,7 @@
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p ~/Library/LaunchAgents ~/Library/Logs
-cp "$D/local.us1800d.plist" ~/Library/LaunchAgents/
+sed -e "s|__REPO__|$(dirname "$D")|g" -e "s|__HOME__|$HOME|g" "$D/local.us1800d.plist" > ~/Library/LaunchAgents/local.us1800d.plist
 pkill us1800d || true
 sleep 2
 launchctl bootout gui/$(id -u)/local.us1800d 2>/dev/null || true

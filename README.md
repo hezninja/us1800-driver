@@ -68,8 +68,11 @@ sudo plugin/install.sh                      # copies the plug-in to /Library/Aud
 launchd/install.sh                          # installs the login item and starts the daemon
 ```
 
-The login item runs `build/us1800d` from where you cloned the repo, so keep the checkout in place (or edit
-`launchd/local.us1800d.plist`, which has an absolute path).
+The login item runs `build/us1800d` from where you cloned the repo, so keep the checkout in place. `launchd/install.sh`
+fills the repo and home paths into the plist for whoever runs it.
+
+Plug-ins and login items need admin rights, and the plug-in is ad-hoc signed, so a managed (MDM) Mac may refuse them.
+After an unplug the daemon exits and launchd restarts it; it waits for the unit and the plug-in stays attached.
 
 Uninstall:
 
@@ -111,7 +114,8 @@ for debugging: `US1800_DUMP` (write the playback wire data to a file), `US1800_N
 4. `build/us1800_client stat` prints `running=1 ... usb_errors=0`.
 5. System Settings > Sound lists **US1800**. Select it for input and output and play something. Both monitor channels
    should work; outputs 1 and 2 are the left and right monitors.
-6. Optional and untested: power-cycle the unit while logged in. The daemon is set to restart if it exits, but unplug/replug recovery has not been verified.
+6. Unplug the unit and plug it back in. The daemon exits, restarts, waits for the unit, and audio returns after a few seconds with no
+   `coreaudiod` restart. Verified with Spotify; wake from sleep is untested.
 7. Check the log: `tail ~/Library/Logs/us1800d.log` should show a status line every 10 s with `usb_errors=0`.
 
 ## Testing

@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>Label</key><string>local.us1800d</string>
-    <key>ProgramArguments</key><array><string>/Users/henrymonaghan/us1800-driver/build/us1800d</string></array>
+    <key>ProgramArguments</key><array><string>__REPO__/build/us1800d</string></array>
     <key>RunAtLoad</key><true/>
     <key>KeepAlive</key><true/>
     <key>ThrottleInterval</key><integer>5</integer>
-    <key>StandardOutPath</key><string>/Users/henrymonaghan/Library/Logs/us1800d.log</string>
-    <key>StandardErrorPath</key><string>/Users/henrymonaghan/Library/Logs/us1800d.log</string>
+    <key>StandardOutPath</key><string>__HOME__/Library/Logs/us1800d.log</string>
+    <key>StandardErrorPath</key><string>__HOME__/Library/Logs/us1800d.log</string>
 </dict>
 </plist>
