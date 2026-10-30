@@ -166,3 +166,7 @@ Plug-in events go to os_log subsystem `local.us1800`:
   only and **not** included), and from the community output driver `MarlonFauser/tascam-us1800-driver` (license unstated, not
   included here).
 - "TASCAM" and "US-1800" are trademarks of TEAC Corporation. This project is independent and unofficial.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Not affiliated with or endorsed by TASCAM / TEAC.
